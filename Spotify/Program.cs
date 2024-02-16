@@ -14,8 +14,8 @@ namespace Spotify
         static async Task Main(string[] args)
         {
             string clientId = "3767cb2750d04375a5604e6045041732"; // Replace with your actual client ID
-            string redirectUri = "http://localhost/callback/"; // Replace with your actual redirect URI
-            string scope = "user-read-private user-read-email user-top-read"; // Scopes requested by your application
+            string redirectUri = "http://192.168.1.48/callback/"; // Replace with your actual redirect URI
+            string scope = "user-read-private user-read-email user-top-read playlist-modify-public playlist-modify-private";// Scopes requested by your application
 
             // Set up HTTP listener
             using (var listener = new HttpListener())
@@ -39,6 +39,10 @@ namespace Spotify
 
                             // Fetch top artists
                             await GetTopArtists(accessToken);
+
+                            // Create a new playlist
+                            string playlistName = "New Test Playlist"; // Replace with your desired playlist name
+                            string playlistId = await CreatePlaylist(accessToken, playlistName);
                         }
                     }
 
@@ -167,6 +171,63 @@ namespace Spotify
             catch (Exception ex)
             {
                 Console.WriteLine($"An error occurred while retrieving top tracks: {ex.Message}");
+            }
+        }
+        static async Task<string> CreatePlaylist(string accessToken, string playlistName)
+        {
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
+
+                    // Define the endpoint URL for creating a playlist
+                    string createPlaylistUrl = "https://api.spotify.com/v1/me/playlists";
+
+                    // Define the request body with the playlist name
+                    var requestBody = new
+                    {
+                        name = playlistName
+                    };
+
+                    // Serialize the request body to JSON
+                    var requestBodyJson = JsonConvert.SerializeObject(requestBody);
+
+                    // Create a new HttpRequestMessage for the POST request
+                    var request = new HttpRequestMessage(HttpMethod.Post, createPlaylistUrl)
+                    {
+                        Content = new StringContent(requestBodyJson, Encoding.UTF8, "application/json")
+                    };
+
+                    // Send the POST request
+                    HttpResponseMessage response = await client.SendAsync(request);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string responseBody = await response.Content.ReadAsStringAsync();
+                        dynamic jsonResponse = JsonConvert.DeserializeObject(responseBody);
+                        string playlistId = jsonResponse.id;
+                        Console.WriteLine($"Playlist created successfully. ID: {playlistId}");
+                        return playlistId;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Failed to create playlist. Status code: {response.StatusCode}");
+                        string errorResponse = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine($"Error response: {errorResponse}");
+                        return null;
+                    }
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"An HTTP request error occurred: {ex.Message}");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"An error occurred while creating playlist: {ex.Message}");
+                return null;
             }
         }
 
