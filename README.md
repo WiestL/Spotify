@@ -27,9 +27,6 @@ Resolution: Implemented robust JSON parsing logic using Newtonsoft.Json library 
 8. Error Handling Strategies
 Description: Developed strategies to handle various types of errors encountered during API interactions.
 Resolution: Implemented comprehensive error handling mechanisms to gracefully handle HTTP errors, parsing errors, and authentication failures.
-9. Rate Limiting Considerations
-Description: Considered rate limiting imposed by the Spotify API and implemented strategies to manage rate limits.
-Resolution: Implemented rate limit monitoring and backoff strategies to handle rate limiting gracefully and prevent API abuse.
-10. Debugging and Troubleshooting
+9. Debugging and Troubleshooting
 Description: Engaged in debugging and troubleshooting activities to identify and resolve issues encountered during development.
 Resolution: Leveraged debugging tools, logging, and systematic troubleshooting approaches to diagnose and address issues effectively.
