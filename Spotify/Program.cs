@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -32,11 +33,9 @@ namespace Spotify
                         string accessToken = await GetAccessToken(clientId, redirectUri, authorizationCode);
                         if (!string.IsNullOrEmpty(accessToken))
                         {
-                            Console.WriteLine($"Access Token: {accessToken}");
-                            // Create a new playlist
-                            string playlistName = "New Test Playlist"; // Replace with your desired playlist name
-                            string playlistId = await CreatePlaylist(accessToken, playlistName);
-                            await AddGenreToPlaylist(accessToken, playlistId);
+                            List<string> userTopTrackUris = await GetUserTopTrackUris(accessToken);
+                            await CreatePersonalizedPlaylist(accessToken);
+                            //await AddGenreToPlaylist(accessToken, playlistId);
                         }
                     }
 
@@ -54,6 +53,239 @@ namespace Spotify
                 Console.WriteLine("HTTP listener stopped.");
             }
         }
+        static bool GenresMatch(List<string> artistGenres, List<string> userGenres)
+        {
+            var normalizedUserGenres = userGenres.Select(g => g.ToLower().Replace("-", "").Replace(" ", ""));
+            var normalizedArtistGenres = artistGenres.Select(g => g.ToLower().Replace("-", "").Replace(" ", ""));
+
+            return normalizedArtistGenres.Any(artistGenre => normalizedUserGenres.Any(userGenre => artistGenre.Contains(userGenre)));
+        }
+
+
+        static async Task CreatePersonalizedPlaylist(string accessToken)
+        {
+            Console.WriteLine("Enter the genres separated by comma (e.g., rock,pop,hip-hop):");
+            string genreInput = Console.ReadLine();
+            List<string> genres = genreInput.Split(',').Select(g => g.Trim()).ToList();
+
+            Console.WriteLine("Enter the number of songs you want in the playlist:");
+            if (!int.TryParse(Console.ReadLine(), out int playlistLength))
+            {
+                Console.WriteLine("Invalid input for the number of songs. Please enter a valid number.");
+                return;
+            }
+
+            // Fetch the user's top artists and their genres
+            List<(string artistId, List<string> genres)> topArtistsGenres = await GetUserTopArtistsGenres(accessToken);
+
+            // Filter artists by the specified genres
+            var filteredArtists = topArtistsGenres.Where(artist => GenresMatch(artist.genres, genres)).ToList();
+
+            Console.WriteLine($"User specified genres: {string.Join(", ", genres)}");
+            Console.WriteLine($"Filtered artists count: {filteredArtists.Count}");
+
+            if (filteredArtists.Count == 0)
+            {
+                Console.WriteLine("No artists matched the specified genres.");
+                return;
+            }
+
+            // Initialize variables for playlist creation
+            List<string> playlistTracks = new List<string>();
+            HashSet<string> addedArtistIds = new HashSet<string>();
+
+            // Add tracks from filtered artists, respecting the limit of 2 songs per artist
+            foreach (var artist in filteredArtists)
+            {
+                if (playlistTracks.Count >= playlistLength) break; // Check if the playlist already has the desired number of songs
+                var artistTracks = await FetchTopTracksByArtist(accessToken, artist.artistId);
+                foreach (var track in artistTracks)
+                {
+                    if (addedArtistIds.Count(artistId => artistId == artist.artistId) < 2)
+                    {
+                        playlistTracks.Add(track);
+                        addedArtistIds.Add(artist.artistId);
+                        if (playlistTracks.Count >= playlistLength) break;
+                    }
+                }
+            }
+
+            // Create and populate the playlist
+            string playlistId = await CreatePlaylist(accessToken, "Your Personalized Playlist");
+            if (playlistTracks.Count == 0)
+            {
+                Console.WriteLine("No tracks were found for the specified genres or top artists.");
+            }
+            else
+            {
+                Console.WriteLine($"Attempting to add {playlistTracks.Count} tracks to the playlist.");
+            }
+            await AddTracksToPlaylist(accessToken, playlistId, playlistTracks);
+        }
+        static async Task<List<string>> FetchTopTracksByArtist(string accessToken, string artistId)
+        {
+            List<string> topTracksUris = new List<string>();
+            using (HttpClient client = new HttpClient())
+            {
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+                string url = $"https://api.spotify.com/v1/artists/{artistId}/top-tracks?market=US";
+
+                HttpResponseMessage response = await client.GetAsync(url);
+                if (response.IsSuccessStatusCode)
+                {
+                    string content = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Top tracks for artist ID {artistId}: {content}"); // Debugging line
+                    dynamic jsonResponse = JsonConvert.DeserializeObject(content);
+
+                    foreach (var track in jsonResponse.tracks)
+                    {
+                        topTracksUris.Add((string)track.uri);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Failed to fetch top tracks for artist {artistId}. Response: {response.StatusCode}");
+                }
+            }
+            return topTracksUris;
+        }
+
+
+
+        static async Task<List<(string artistId, List<string> genres)>> GetUserTopArtistsGenres(string accessToken)
+        {
+            List<(string artistId, List<string> genres)> topArtistsGenres = new List<(string artistId, List<string> genres)>();
+            using (HttpClient client = new HttpClient())
+            {
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+                string url = "https://api.spotify.com/v1/me/top/artists?limit=20";
+
+                HttpResponseMessage response = await client.GetAsync(url);
+                if (response.IsSuccessStatusCode)
+                {
+                    string content = await response.Content.ReadAsStringAsync();
+                    dynamic jsonResponse = JsonConvert.DeserializeObject(content);
+
+                    foreach (var item in jsonResponse.items)
+                    {
+                        List<string> genres = new List<string>();
+                        foreach (var genre in item.genres)
+                        {
+                            genres.Add((string)genre);
+                        }
+                        topArtistsGenres.Add((item.id.ToString(), genres));
+                        Console.WriteLine($"Artist ID: {item.id}, Genres: {string.Join(", ", genres)}"); // Debugging line
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Failed to retrieve user's top artists. Status code: {response.StatusCode}");
+                }
+            }
+            return topArtistsGenres;
+        }
+
+
+        static async Task<List<string>> GetUserTopTrackUris(string accessToken)
+        {
+            List<string> topTrackUris = new List<string>();
+
+            using (HttpClient client = new HttpClient())
+            {
+                // Set the authorization header with the access token
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+                // Define the URL for fetching the user's top tracks. You can adjust the limit and time_range as needed.
+                string url = "https://api.spotify.com/v1/me/top/tracks?limit=50";
+
+                try
+                {
+                    // Make the GET request to Spotify's API
+                    HttpResponseMessage response = await client.GetAsync(url);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        // Parse the response body
+                        string content = await response.Content.ReadAsStringAsync();
+                        dynamic jsonResponse = JsonConvert.DeserializeObject(content);
+
+                        // Extract the URIs from the top tracks
+                        foreach (var item in jsonResponse.items)
+                        {
+                            topTrackUris.Add((string)item.uri);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Failed to retrieve user's top tracks. Status code: {response.StatusCode}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"An error occurred while fetching user's top tracks: {ex.Message}");
+                }
+            }
+
+            return topTrackUris;
+        }
+
+        static async Task<List<(string uri, string artistId)>> SearchTracksByGenre(string accessToken, string genre)
+        {
+            List<(string uri, string artistId)> trackData = new List<(string uri, string artistId)>();
+            using (HttpClient client = new HttpClient())
+            {
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
+
+                string searchUrl = $"https://api.spotify.com/v1/search?q=genre:{Uri.EscapeDataString(genre)}&type=artist&limit=10";
+                HttpResponseMessage response = await client.GetAsync(searchUrl);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    string responseBody = await response.Content.ReadAsStringAsync();
+                    dynamic jsonResponse = JsonConvert.DeserializeObject(responseBody);
+
+                    foreach (var artist in jsonResponse.artists.items)
+                    {
+                        string artistId = artist.id.ToString();
+                        string topTracksUrl = $"https://api.spotify.com/v1/artists/{artistId}/top-tracks?country=US";
+                        HttpResponseMessage topTracksResponse = await client.GetAsync(topTracksUrl);
+
+                        if (topTracksResponse.IsSuccessStatusCode)
+                        {
+                            string topTracksResponseBody = await topTracksResponse.Content.ReadAsStringAsync();
+                            dynamic topTracksJsonResponse = JsonConvert.DeserializeObject(topTracksResponseBody);
+
+                            foreach (var track in topTracksJsonResponse.tracks)
+                            {
+                                trackData.Add((track.uri.ToString(), artistId));
+                            }
+                        }
+                    }
+                }
+            }
+            return trackData;
+        }
+        static List<string> FilterUserTopTracksByGenre(List<string> userTopTracks, List<string> genres, string accessToken)
+        {
+            List<string> filteredTracks = new List<string>();
+            // This method would require fetching each track's artist and then fetching the artist's genres to compare with the input genres.
+            // Due to the complexity and API rate limits, consider this a conceptual implementation.
+            return filteredTracks;
+        }
+        static List<string> SelectTracksForPlaylist(List<(string uri, string artistId)> trackData, int remainingSlots, HashSet<string> addedArtistIds)
+        {
+            List<string> playlistTracks = new List<string>();
+            foreach (var track in trackData)
+            {
+                if (playlistTracks.Count >= remainingSlots) break;
+                if (addedArtistIds.Count(artistId => artistId == track.artistId) < 2)
+                {
+                    playlistTracks.Add(track.uri);
+                    addedArtistIds.Add(track.artistId);
+                }
+            }
+            return playlistTracks;
+        }
+
 
         static async Task<string> GetAuthorizationCode(string clientId, string redirectUri, string scope, HttpListener listener)
         {
@@ -193,56 +425,31 @@ namespace Spotify
         //ADD TRACKS TO PLAYLIST
         static async Task<bool> AddTracksToPlaylist(string accessToken, string playlistId, List<string> trackUris)
         {
-            try
+            if (trackUris == null || !trackUris.Any())
             {
-                using (HttpClient client = new HttpClient())
+                Console.WriteLine("No tracks specified for adding to the playlist.");
+                return false;
+            }
+
+            using (HttpClient client = new HttpClient())
+            {
+                client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+                var content = new StringContent(JsonConvert.SerializeObject(new { uris = trackUris }), Encoding.UTF8, "application/json");
+                var response = await client.PostAsync($"https://api.spotify.com/v1/playlists/{playlistId}/tracks", content);
+
+                if (response.IsSuccessStatusCode)
                 {
-                    client.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
-
-                    // Define the endpoint URL for adding tracks to the playlist
-                    string addTracksUrl = $"https://api.spotify.com/v1/playlists/{playlistId}/tracks";
-
-                    // Define the request body with the track URIs
-                    var requestBody = new
-                    {
-                        uris = trackUris
-                    };
-
-                    // Serialize the request body to JSON
-                    var requestBodyJson = JsonConvert.SerializeObject(requestBody);
-
-                    // Create a new HttpRequestMessage for the POST request
-                    var request = new HttpRequestMessage(HttpMethod.Post, addTracksUrl)
-                    {
-                        Content = new StringContent(requestBodyJson, Encoding.UTF8, "application/json")
-                    };
-
-                    // Send the POST request
-                    HttpResponseMessage response = await client.SendAsync(request);
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        Console.WriteLine("Tracks added to playlist successfully.");
-                        return true;
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Failed to add tracks to playlist. Status code: {response.StatusCode}");
-                        string errorResponse = await response.Content.ReadAsStringAsync();
-                        Console.WriteLine($"Error response: {errorResponse}");
-                        return false;
-                    }
+                    Console.WriteLine("Tracks added to playlist successfully.");
+                    return true;
                 }
-            }
-            catch (HttpRequestException ex)
-            {
-                Console.WriteLine($"An HTTP request error occurred: {ex.Message}");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"An error occurred while adding tracks to playlist: {ex.Message}");
-                return false;
+                else
+                {
+                    string errorResponse = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Failed to add tracks to playlist. Status code: {response.StatusCode}");
+                    Console.WriteLine($"Error response: {errorResponse}");
+                    return false;
+                }
             }
         }
 
