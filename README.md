@@ -60,3 +60,5 @@ I want to make a whole workout companion app. So far I can create a playlist for
   - Documented debugging steps and findings to track progress and facilitate collaboration.
 - **Resolution**: Leveraged debugging and troubleshooting techniques to identify and resolve issues effectively, ensuring the stability and reliability of the application.
 
+### Issue 9: BIG PROBLEM I BROKE ALL MY CODE! Having to restart from the previous implementation. :(
+
