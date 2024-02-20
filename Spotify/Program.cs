@@ -34,7 +34,11 @@ namespace Spotify
                         if (!string.IsNullOrEmpty(accessToken))
                         {
                             List<string> userTopTrackUris = await GetUserTopTrackUris(accessToken);
-                            await CreatePersonalizedPlaylist(accessToken);
+                            var (playlistId, genres) = await CreatePersonalizedPlaylist(accessToken);
+                            if (!string.IsNullOrEmpty(playlistId))
+                            {
+                                await AddNewTracksByGenreToPlaylist(accessToken, playlistId, genres);
+                            }
                             //await AddGenreToPlaylist(accessToken, playlistId);
                         }
                     }
@@ -62,7 +66,7 @@ namespace Spotify
         }
 
 
-        static async Task CreatePersonalizedPlaylist(string accessToken)
+        static async Task<(string playlistId, List<string> genres)> CreatePersonalizedPlaylist(string accessToken)
         {
             Console.WriteLine("Enter the genres separated by comma (e.g., rock,pop,hip-hop):");
             string genreInput = Console.ReadLine();
@@ -72,7 +76,7 @@ namespace Spotify
             if (!int.TryParse(Console.ReadLine(), out int playlistLength))
             {
                 Console.WriteLine("Invalid input for the number of songs. Please enter a valid number.");
-                return;
+                return (null, null); // Return nulls in case of invalid input
             }
 
             // Fetch the user's top artists and their genres
@@ -87,7 +91,7 @@ namespace Spotify
             if (filteredArtists.Count == 0)
             {
                 Console.WriteLine("No artists matched the specified genres.");
-                return;
+                return (null, genres); // Return genres but null playlist ID if no artists match
             }
 
             // Initialize variables for playlist creation
@@ -110,18 +114,21 @@ namespace Spotify
                 }
             }
 
-            // Create and populate the playlist
+            // Create the playlist and add tracks to it
             string playlistId = await CreatePlaylist(accessToken, "Your Personalized Playlist");
             if (playlistTracks.Count == 0)
             {
                 Console.WriteLine("No tracks were found for the specified genres or top artists.");
+                return (playlistId, genres); // Return the created playlist ID and genres, even if no tracks were added
             }
             else
             {
-                Console.WriteLine($"Attempting to add {playlistTracks.Count} tracks to the playlist.");
+                await AddTracksToPlaylist(accessToken, playlistId, playlistTracks);
+                Console.WriteLine($"Playlist created with ID: {playlistId}. Tracks added: {playlistTracks.Count}");
+                return (playlistId, genres); // Return both the playlist ID and the genres
             }
-            await AddTracksToPlaylist(accessToken, playlistId, playlistTracks);
         }
+
         static async Task<List<string>> FetchTopTracksByArtist(string accessToken, string artistId)
         {
             List<string> topTracksUris = new List<string>();
@@ -264,13 +271,7 @@ namespace Spotify
             }
             return trackData;
         }
-        static List<string> FilterUserTopTracksByGenre(List<string> userTopTracks, List<string> genres, string accessToken)
-        {
-            List<string> filteredTracks = new List<string>();
-            // This method would require fetching each track's artist and then fetching the artist's genres to compare with the input genres.
-            // Due to the complexity and API rate limits, consider this a conceptual implementation.
-            return filteredTracks;
-        }
+
         static List<string> SelectTracksForPlaylist(List<(string uri, string artistId)> trackData, int remainingSlots, HashSet<string> addedArtistIds)
         {
             List<string> playlistTracks = new List<string>();
@@ -452,6 +453,44 @@ namespace Spotify
                 }
             }
         }
+        static async Task AddNewTracksByGenreToPlaylist(string accessToken, string playlistId, List<string> genres)
+        {
+            foreach (var genre in genres)
+            {
+                // Fetch new artists by genre
+                var newArtistsTracks = await SearchTracksByGenre(accessToken, genre);
+
+                // Filter to get a distinct list of tracks, avoiding duplicates and respecting new artists
+                var distinctTracks = newArtistsTracks
+                    .Where(t => !string.IsNullOrWhiteSpace(t.uri))
+                    .GroupBy(t => t.artistId)
+                    .Select(grp => grp.First()) // This ensures one track per artist, modify as needed
+                    .ToList();
+
+                if (distinctTracks.Count > 0)
+                {
+                    // Extract URIs from the distinct tracks
+                    var trackUris = distinctTracks.Select(t => t.uri).ToList();
+
+                    // Add these tracks to the playlist
+                    bool success = await AddTracksToPlaylist(accessToken, playlistId, trackUris);
+
+                    if (success)
+                    {
+                        Console.WriteLine($"Added {trackUris.Count} new tracks from genre '{genre}' to the playlist.");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Failed to add new tracks from genre '{genre}' to the playlist.");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"No new tracks found for genre '{genre}'.");
+                }
+            }
+        }
+
 
 
         //ADD GENRE TO PLAYLIST
