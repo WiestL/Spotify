@@ -36,7 +36,7 @@ I want to make a whole workout companion app. So far I can create a playlist for
 - **Description**: Encountered challenges accessing specific API endpoints, such as retrieving top tracks or artists.
 - **Steps Taken**:
   - Reviewed the API documentation carefully and adjusted endpoint URLs and parameters as needed.
-  - Tested API endpoint access thoroughly to verify correct usage of permissions and scopes.
+  - Tested API endpoint access thoroughly to verify the correct usage of permissions and scopes.
 - **Resolution**: Resolved API endpoint access problems by adjusting endpoint URLs and parameters according to the API documentation and ensuring proper authentication and authorization.
 
 ### Issue 6: JSON Parsing Errors
@@ -51,7 +51,7 @@ I want to make a whole workout companion app. So far I can create a playlist for
 - **Steps Taken**:
   - Developed comprehensive error handling mechanisms to gracefully handle HTTP errors, parsing errors, and authentication failures.
   - Categorized errors based on severity and implemented appropriate error messages or actions for each category.
-- **Resolution**: Successfully implemented comprehensive error handling strategies to ensure smooth user experience and mitigate potential issues.
+- **Resolution**: Successfully implemented comprehensive error handling strategies to ensure a smooth user experience and mitigate potential issues.
 
 ### Issue 8: Debugging and Troubleshooting
 - **Description**: Engaged in debugging and troubleshooting activities to identify and resolve issues encountered during development.
@@ -61,4 +61,40 @@ I want to make a whole workout companion app. So far I can create a playlist for
 - **Resolution**: Leveraged debugging and troubleshooting techniques to identify and resolve issues effectively, ensuring the stability and reliability of the application.
 
 ### Issue 9: BIG PROBLEM I BROKE ALL MY CODE! Having to restart from the previous implementation. :(
+
+### Issue 10: User Input Validation
+- **Description**: Encountered issues with handling invalid user inputs for genres and the number of songs, which could cause the application to crash or behave unexpectedly.
+- **Steps Taken**:
+  - Implemented input validation checks to ensure that user inputs for genres and song numbers are in the expected format and range.
+  - Added error messages to guide users towards providing valid inputs.
+- **Resolution**: Enhanced user experience and application stability by implementing robust input validation and feedback mechanisms, ensuring that only valid inputs are processed.
+
+### Issue 11: Playlist Duplication
+- **Description**: Identical playlists were being created upon multiple executions of the application, leading to clutter and confusion.
+- **Steps Taken**:
+  - Reviewed the playlist creation logic to identify the cause of duplication.
+  - Implemented checks to search for existing playlists with the same name before creating a new one.
+- **Resolution**: Prevented playlist duplication by enhancing the application's logic to check for and reuse existing playlists, significantly improving user satisfaction.
+
+### Issue 12: Rate Limiting Issues
+- **Description**: The application encountered Spotify API rate limits, leading to failed requests and a degraded user experience.
+- **Steps Taken**:
+  - Implemented exponential backoff in the request logic to handle rate-limiting responses from the Spotify API.
+  - Optimized the number of API calls to minimize hitting rate limits.
+- **Resolution**: Successfully mitigated rate limiting issues, resulting in a more reliable application by intelligently managing API requests and respecting Spotify's rate limits.
+
+### Issue 13: Inconsistent Playlist Content
+- **Description**: The content of generated playlists did not always align with their specified genres, affecting the overall quality of the playlist.
+- **Steps Taken**:
+  - Analyzed the genre filtering logic and the algorithm for selecting tracks.
+  - Refined the approach to matching user preferences with available tracks on Spotify.
+- **Resolution**: Improved the relevance and quality of playlist content by refining genre matching and track selection algorithms, leading to higher user satisfaction.
+
+### Issue 14: Lack of Workout-Specific Features
+- **Description**: Although the app successfully creates genre-specific playlists, the integration of workout-specific features like tempo matching was not achieved.
+- **Steps Taken**:
+  - Researched Spotify API capabilities related to audio features such as tempo, energy, and danceability.
+  - Explored potential algorithms for matching songs to workout intensity levels.
+- **Resolution**: Identified a roadmap for integrating workout-specific features, including the potential use of Spotify's audio features API for future development. Currently, the feature remains under consideration for future updates, with plans to implement a more personalized workout music experience.
+
 
